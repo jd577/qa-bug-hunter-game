@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QA Bug Hunter — Find the bugs. Break the build. Prove your QA skills.</title>
+  <meta name="description" content="A browser-based QA testing game. Inspect a simulated web application, reproduce defects, file bug reports and score points as a Software QA Engineer.">
+  <meta name="theme-color" content="#0a0f1e">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230d1428'/%3E%3Ccircle cx='27' cy='27' r='14' fill='none' stroke='%235b8cff' stroke-width='6'/%3E%3Cline x1='38' y1='38' x2='53' y2='53' stroke='%235b8cff' stroke-width='7' stroke-linecap='round'/%3E%3Ccircle cx='27' cy='27' r='5.5' fill='%23f87171'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#aut">Skip to the application under test</a>
+
+  <!-- ============ GAME SHELL ============ -->
+  <div id="app">
+
+    <header class="site-header">
+      <div class="header-inner">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 64 64" width="40" height="40" focusable="false">
+              <rect width="64" height="64" rx="14" fill="#152040"></rect>
+              <circle cx="27" cy="27" r="13" fill="none" stroke="#5b8cff" stroke-width="5"></circle>
+              <line x1="37" y1="37" x2="52" y2="52" stroke="#5b8cff" stroke-width="6" stroke-linecap="round"></line>
+              <circle cx="27" cy="27" r="5" fill="#f87171"></circle>
+            </svg>
+          </span>
+          <div class="brand-text">
+            <h1>QA Bug Hunter</h1>
+            <p>Find the bugs. Break the build. Prove your QA skills.</p>
+          </div>
+        </div>
+
+        <div class="hud" aria-label="Session statistics">
+          <div class="chip chip-score" id="chip-score">
+            <span class="chip-label">Score</span>
+            <span class="chip-value" id="hud-score">0</span>
+          </div>
+          <div class="chip">
+            <span class="chip-label">Round</span>
+            <span class="chip-value" id="hud-round">—/3</span>
+          </div>
+          <div class="chip">
+            <span class="chip-label">Bugs Found</span>
+            <span class="chip-value" id="hud-found">0/0</span>
+          </div>
+          <div class="chip">
+            <span class="chip-label">Remaining</span>
+            <span class="chip-value" id="hud-remaining">—</span>
+          </div>
+          <div class="chip chip-timer" id="chip-timer" role="timer" aria-live="off">
+            <span class="chip-label">Time</span>
+            <span class="chip-value" id="hud-timer">—:—</span>
+          </div>
+          <button id="btn-sound" class="icon-btn" type="button" aria-pressed="true" aria-label="Sound is on. Turn sound off">
+            <span class="snd-on" aria-hidden="true">🔊</span>
+            <span class="snd-off" aria-hidden="true">🔇</span>
+          </button>
+        </div>
+      </div>
+      <div class="progress-track" aria-hidden="true"><div class="progress-fill" id="progress-fill"></div></div>
+    </header>
+
+    <main class="layout" id="layout">
+
+      <!-- ============ APPLICATION UNDER TEST ============ -->
+      <section class="aut-column" aria-label="Application under test">
+        <div class="toolbar">
+          <button id="btn-inspector" class="inspector-toggle" type="button" aria-pressed="false" disabled>
+            <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false">
+              <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"></circle>
+              <line x1="15.5" y1="15.5" x2="21" y2="21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"></line>
+            </svg>
+            Inspector <span class="toggle-state">OFF</span>
+          </button>
+          <div class="build-info" id="build-info">No active session</div>
+          <button id="btn-finish" class="btn-ghost" type="button" disabled>Finish Testing</button>
+        </div>
+
+        <div class="browser-frame" id="browser-frame">
+          <div class="browser-chrome" aria-hidden="true">
+            <span class="dot d-red"></span><span class="dot d-amber"></span><span class="dot d-green"></span>
+            <span class="url-bar">🔒 <span id="aut-url">emphub.app</span></span>
+            <span class="inspect-led" id="inspect-led">INSPECT</span>
+          </div>
+          <div id="aut" class="aut" tabindex="-1">
+            <div class="aut-placeholder">
+              <p><strong>No active session</strong></p>
+              <p>Start a testing session to load the application under test.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SESSION PANEL ============ -->
+      <aside class="side-panel" aria-label="Session panel">
+        <section class="panel-card">
+          <h2 class="panel-title">Test Objective</h2>
+          <div id="objective-body">
+            <p class="obj-muted">Your test brief will appear here once a session starts.</p>
+          </div>
+        </section>
+
+        <section class="panel-card">
+          <h2 class="panel-title">Defect Tracker <span class="tracker-count" id="tracker-count">0</span></h2>
+          <ul class="tracker-list" id="tracker-list" aria-live="polite">
+            <li class="tracker-empty">No defects filed yet. Toggle the Inspector, then click a suspicious element.</li>
+          </ul>
+        </section>
+
+        <section class="panel-card">
+          <h2 class="panel-title">Tester Tips</h2>
+          <ul class="tips-list" id="tips-list">
+            <li>Start a session to receive your test brief.</li>
+          </ul>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="site-footer">
+      <p class="credit">Built by <strong id="footer-name">Jawad Akhter</strong> · <span id="footer-role">Software Quality Assurance Engineer</span></p>
+      <nav class="footer-links" id="footer-links" aria-label="Profile links"></nav>
+    </footer>
+  </div>
+
+  <noscript>
+    <div class="noscript-box">QA Bug Hunter needs JavaScript to run. Please enable JavaScript and reload the page.</div>
+  </noscript>
+
+  <!-- Overlays (start screen, round intros, results) -->
+  <div id="overlay-root"></div>
+  <!-- Dialogs (bug report, confirmations, round summaries) -->
+  <div id="modal-root"></div>
+  <!-- Toast notifications -->
+  <div id="toast-root" aria-live="polite" aria-atomic="false"></div>
+
+  <script src="js/game.js"></script>
+</body>
+</html>
