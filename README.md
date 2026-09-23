@@ -64,7 +64,7 @@ cd qa-bug-hunter-game
 
 1. Push the repository to GitHub
 2. Settings → Pages → Deploy from branch → `main` / root
-3. Your game is live at `https://<username>.github.io/qa-bug-hunter/`
+3. Your game is live at `https://<username>.github.io/qa-bug-hunter-game/`
 
 ---
 
@@ -122,7 +122,7 @@ cd qa-bug-hunter-game
 ## 📁 Project Structure
 
 ```text
-qa-bug-hunter/
+qa-bug-hunter-game/
 │
 ├── index.html          # Game shell: header, HUD, AUT frame, panels, overlays
 ├── css/
