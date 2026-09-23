@@ -55,8 +55,8 @@ No frameworks, no build step, no dependencies, no network calls.
 **Option 2 — clone**
 
 ```bash
-git clone https://github.com/jd577/qa-bug-hunter.git
-cd qa-bug-hunter
+git clone https://github.com/jd577/qa-bug-hunter-game.git
+cd qa-bug-hunter-game
 # open index.html in your browser
 ```
 
