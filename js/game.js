@@ -37,20 +37,29 @@
         portfolio: 'https://jd577.github.io/portfolio/',
         github: 'https://github.com/jd577',
         linkedin: 'https://www.linkedin.com/in/jawad-akhter',
+        game: 'https://jd577.github.io/qa-bug-hunter-game/',
       },
     },
     scoring: {
       correct: 100,        // confirmed defect (Medium / Low severity)
       correctHigh: 150,    // confirmed Critical / High severity defect
-      incorrect: -50,      // false or unreproducible report
+      incorrect: -50,      // false or unreproducible report (multiplied by difficulty)
       triageBonus: 25,     // player's category + severity both match the actual defect
       allFoundBonus: 250,  // every defect in a round found
       timeBonusPerSec: 1,  // awarded per second left on the clock (all found)
+      hintCost: 75,        // cost of a scoped clue
+    },
+    difficulties: {
+      relaxed:  { label: 'Relaxed',  timeMult: 1.5, penaltyMult: 1, desc: '+50% time on every round' },
+      standard: { label: 'Standard', timeMult: 1,   penaltyMult: 1, desc: 'The intended QA pacing' },
+      hardcore: { label: 'Hardcore', timeMult: 0.7, penaltyMult: 2, desc: '−30% time · double penalties' },
     },
     storageKey: 'qabh-sound',
+    diffKey: 'qabh-diff',
+    historyKey: 'qabh-history',
   };
 
-  const CATEGORIES = ['Functional', 'Validation', 'UI', 'Data', 'Security', 'Usability'];
+  const CATEGORIES = ['Functional', 'Validation', 'UI', 'Data', 'Security', 'Usability', 'Performance'];
   const SEVERITIES = ['Critical', 'High', 'Medium', 'Low'];
   const PAGE_SIZE = 5; // employees per page in the directory
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // what the app *should* enforce
@@ -177,6 +186,86 @@
   const badgeClassOf = (status) =>
     status === 'Active' ? 'b-active' : status === 'On Leave' ? 'b-leave' : 'b-inactive';
 
+  /* ----- Round 4 fixtures: captured API traffic (deep-cloned per session) ----- */
+
+  const API_REQUESTS = [
+    {
+      id: 'login', method: 'POST', path: '/api/auth/login', status: 200, statusText: 'OK', ms: 118,
+      headers: { 'Content-Type': 'application/json', 'X-Request-Id': 'req-8f21a' },
+      body: { success: true, token: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJxYS50ZXN0ZXIifQ.demo', issuedAt: '2026-09-23T09:12:44Z', expiresAt: '2026-09-23T17:12:44Z' },
+    },
+    {
+      id: 'me', method: 'GET', path: '/api/users/me', status: 200, statusText: 'OK', ms: 61,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      body: { id: 42, username: 'qa.tester', role: 'QA Engineer', email: 'qa.tester@emphub.io', passwordHash: '$2b$12$Xk9wQ2pLmR4vTn8jHf3KZe6Yb0aC7dW1eS5gU2hJ8iM6nO4qP7rTu', lastLogin: '2026-09-23T09:12:44Z' },
+    },
+    {
+      id: 'list', method: 'GET', path: '/api/employees?page=1&limit=5', status: 200, statusText: 'OK', ms: 142,
+      headers: { 'Content-Type': 'application/json', 'X-Total-Count': '8' },
+      body: {
+        page: 1, limit: 5, total: 8,
+        employees: [
+          { id: 'EMP-001', name: 'Ayesha Khan', email: 'ayesha.khan@emphub.io', department: 'Engineering', salary: 95000, status: 'Active', statusLabel: 'Active' },
+          { id: 'EMP-002', name: 'Bilal Ahmed', email: 'bilal.ahmed@emphub.io', department: 'Design', salary: 68000, status: 'Active', statusLabel: 'Active' },
+          { id: 'EMP-011', name: 'Nadia Farooq', email: 'nadia.farooq@emphub.io', department: 'Finance', salary: 57500, status: 'Inactive', statusLabel: 'Active' },
+          { id: 'EMP-004', name: 'Hamza Sheikh', email: 'hamza.sheikh@emphub.io', department: 'Engineering', salary: 88000, status: 'On Leave', statusLabel: 'On Leave' },
+          { id: 'EMP-007', name: 'Usman Tariq', email: 'usman.tariq@emphub.io', department: 'Marketing', salary: 83000, status: 'Active', statusLabel: 'Active' },
+        ],
+      },
+    },
+    {
+      id: 'emp7', method: 'GET', path: '/api/employees/EMP-007', status: 200, statusText: 'OK', ms: 89,
+      headers: { 'Content-Type': 'application/json', 'ETag': 'W/"4f2a9c"' },
+      body: { id: 'EMP-007', name: 'Usman Tariq', dept: 'Marketing', salary: 83000, status: 'Active' },
+    },
+    {
+      id: 'del', method: 'DELETE', path: '/api/employees/EMP-003', status: 200, statusText: 'OK', ms: 204,
+      headers: { 'Content-Type': 'application/json' },
+      body: { success: false, error: 'Employee not found', deletedId: 'EMP-003', attemptedAt: '2026-09-23T09:31:02Z' },
+    },
+    {
+      id: 'export', method: 'POST', path: '/api/reports/export', status: 202, statusText: 'Accepted', ms: 30142,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': '30' },
+      body: { success: true, message: 'Export queued for processing', jobId: 'job-e71b', downloadUrl: null },
+    },
+    {
+      id: 'search', method: 'GET', path: '/api/employees/search?q=ayesha', status: 200, statusText: 'OK', ms: 96,
+      headers: { 'Content-Type': 'application/json' },
+      body: { query: 'ayesha', count: 1, results: [{ id: 'EMP-001', name: 'Ayesha Khan', email: 'ayesha.khan@emphub.io', department: 'Engineering', salary: 95000, status: 'Active' }] },
+    },
+  ];
+
+  const cloneBody = (value) => {
+    if (Array.isArray(value)) return value.map(cloneBody);
+    if (value && typeof value === 'object') {
+      const out = {};
+      Object.keys(value).forEach((k) => { out[k] = cloneBody(value[k]); });
+      return out;
+    }
+    return value;
+  };
+
+  const cloneRequests = () => API_REQUESTS.map((r) => ({ ...r, headers: { ...r.headers }, body: cloneBody(r.body) }));
+
+  /* Renders a JS value as syntax-highlighted, fully escaped JSON markup. */
+  function jsonHTML(value, depth) {
+    const d = depth || 0;
+    const pad = '  '.repeat(d);
+    const padIn = '  '.repeat(d + 1);
+    if (value === null) return '<span class="j-null">null</span>';
+    if (typeof value === 'string') return `<span class="j-str">"${esc(value)}"</span>`;
+    if (typeof value === 'number' || typeof value === 'boolean') return `<span class="j-num">${value}</span>`;
+    if (Array.isArray(value)) {
+      if (!value.length) return '[]';
+      const items = value.map((v) => padIn + jsonHTML(v, d + 1)).join(',\n');
+      return `[\n${items}\n${pad}]`;
+    }
+    const keys = Object.keys(value);
+    if (!keys.length) return '{}';
+    const items = keys.map((k) => `${padIn}<span class="j-key">"${esc(k)}"</span>: ${jsonHTML(value[k], d + 1)}`).join(',\n');
+    return `{\n${items}\n${pad}}`;
+  }
+
   /* ======================================================================
      5. BUG + ROUND DEFINITIONS
      Every bug targets element keys (data-key attributes inside the AUT).
@@ -200,6 +289,7 @@
         'Start with the happy path using the test account, then test around it.',
         'Some defects only appear after you interact — click everything.',
         'Press I (or use the toolbar) to toggle the Inspector, then click an element to report it.',
+        'Need a breather? Press P to pause the clock.',
       ],
       createData: () => ({}),
       render: renderLoginApp,
@@ -207,6 +297,7 @@
         {
           id: 'r1-empty-login', title: 'Login succeeds with empty credentials',
           category: 'Validation', severity: 'Critical',
+          hint: "The login form only validates when something is typed. What happens if you submit it completely empty?",
           description: "Submitting the login form with both fields empty shows 'Login successful' and starts a session. Expected: required-field validation should block submission and display error messages.",
           targets: ['r1-login-btn'],
           active: (r) => !!r.flags.emptyLogin,
@@ -214,18 +305,21 @@
         {
           id: 'r1-password-plaintext', title: 'Password input displays characters in plain text',
           category: 'Security', severity: 'High',
+          hint: 'Type into both login fields and watch carefully how each one displays what you entered.',
           description: "Typed credentials are rendered as readable text instead of being masked. Expected: the input should mask characters (type 'password'). Risk: credential exposure to shoulder-surfing and screen capture.",
           targets: ['r1-password', 'r1-password-label'],
         },
         {
           id: 'r1-dead-link', title: "'Forgot password?' control is unresponsive",
           category: 'Functional', severity: 'Medium',
+          hint: 'Authentication screens usually offer account recovery. Try every navigation control on the login card.',
           description: "Clicking 'Forgot password?' triggers no navigation, no request and no feedback of any kind. Expected: the control should open the password-recovery flow or show a status message.",
           targets: ['r1-forgot'],
         },
         {
           id: 'r1-typo', title: "Misspelled field label 'Userrname'",
           category: 'UI', severity: 'Low',
+          hint: 'Read the labels on the login form carefully, letter by letter.',
           description: "The username field label reads 'Userrname' (doubled 'r'). Expected: 'Username'. A visible text/copy defect on the login screen.",
           targets: ['r1-username-label', 'r1-username'],
         },
@@ -257,6 +351,7 @@
         {
           id: 'r2-search-miss', title: 'Search returns no results for an existing employee',
           category: 'Functional', severity: 'High',
+          hint: "The search box works for some names. Search for employees you can see in the table — all of them.",
           description: "Searching the directory for 'Fatima' — an employee visible in the table — returns 'No matching employees found'. Expected: search should match existing records by name, email or department.",
           targets: ['r2-search'],
           active: (r) => !!r.flags.searchMiss,
@@ -264,6 +359,7 @@
         {
           id: 'r2-stale-count', title: 'Employee count does not update after deletion',
           category: 'UI', severity: 'Medium',
+          hint: "Delete an employee, then compare the numbers at the top of the dashboard with the rows left in the table.",
           description: "After deleting an employee, the 'Total Employees' stat still shows the old value while every other figure refreshes. Expected: the count should recompute after any data change.",
           targets: ['r2-stat-total'],
           active: (r) => !!r.flags.deleted,
@@ -271,12 +367,14 @@
         {
           id: 'r2-status-badge', title: "Inactive employee displayed with an 'Active' badge",
           category: 'Data', severity: 'Medium',
+          hint: "Apply the status filter and cross-check every badge against the filter you selected.",
           description: "Filtering by status 'Inactive' reveals Zainab Ali with an 'Active' badge. The stored status is 'Inactive', so the badge does not reflect the actual record data.",
           targets: ['badge-EMP-005', 'row-EMP-005'],
         },
         {
           id: 'r2-pagination', title: "'Next' navigates past the last page to an empty page",
           category: 'Functional', severity: 'Low',
+          hint: "Walk the directory to its very last page — then try going one step further.",
           description: "On the last page the 'Next' button stays enabled and navigates to page 3 of 2, showing an empty table and an out-of-range range ('Showing 11–15 of 8'). Expected: 'Next' should be disabled on the last page.",
           targets: ['r2-pagination', 'r2-page-next'],
           active: (r) => !!r.flags.overPaged,
@@ -307,6 +405,7 @@
         {
           id: 'r3-broken-save', title: "'Save Changes' button performs no action",
           category: 'Functional', severity: 'High',
+          hint: "Enter edit mode for any employee, change something, and try to save.",
           description: "In edit mode the 'Save Changes' button appears enabled, but clicking it produces no request, no feedback and no data change. Expected: clicking Save should persist the edited record or show an error.",
           targets: ['r3-submit'],
           active: (r) => !!r.flags.editSaveTried,
@@ -314,6 +413,7 @@
         {
           id: 'r3-empty-name', title: 'Employee can be created without a name',
           category: 'Validation', severity: 'Critical',
+          hint: "The form enforces two required fields — but is the name field really one of them? Submit and see.",
           description: "The form accepts an empty 'Full Name' and creates a record with a blank name. Expected: name is a required field and submission should be blocked with a validation message.",
           targets: ['r3-name', 'r3-submit'],
           active: (r) => !!r.flags.addedEmptyName,
@@ -321,6 +421,7 @@
         {
           id: 'r3-bad-email', title: 'Invalid email address accepted',
           category: 'Validation', severity: 'High',
+          hint: 'The email check accepts strings no mail server would deliver. Try an address with no domain after the "@".',
           description: "The form accepts clearly invalid email addresses such as 'jawad@' (no domain). Expected: email format should be validated before saving.",
           targets: ['r3-email', 'r3-submit'],
           active: (r) => !!r.flags.addedBadEmail,
@@ -328,6 +429,7 @@
         {
           id: 'r3-negative-salary', title: 'Negative salary accepted',
           category: 'Validation', severity: 'High',
+          hint: "Numbers can be negative. Can the salary field?",
           description: "The salary field accepts negative values such as -50000 and non-numeric text without any validation. Expected: salary must be a non-negative number.",
           targets: ['r3-salary', 'r3-submit'],
           active: (r) => !!r.flags.addedBadSalary,
@@ -335,9 +437,74 @@
         {
           id: 'r3-duplicate', title: 'Duplicate employee can be added',
           category: 'Data', severity: 'Medium',
+          hint: 'Try adding an employee who already exists — same name, different email.',
           description: 'The same employee (matching name) can be added to the directory twice — no duplicate check is performed. Expected: the form should reject or warn about potential duplicate records.',
           targets: ['r3-table'],
           active: (r) => !!r.flags.addedDuplicate,
+        },
+      ],
+    },
+
+    /* ---------------- ROUND 4 — API & NETWORK TESTING ---------------- */
+    {
+      key: 'api',
+      name: 'API & Network Testing',
+      build: 'v1.5.0',
+      url: 'emphub.app/console',
+      duration: 240,
+      brief: 'Final module: the API layer. A network console has captured live traffic between the app and the server. Inspect each request and response against the documented API contract and the 5-second SLA.',
+      scope: ['Status codes', 'Response payloads', 'Data consistency', 'Sensitive data', 'Performance'],
+      testData: 'API contract: id, name, email, department, salary, status · SLA ≤ 5000 ms',
+      tips: [
+        'A 2xx status code does not guarantee the operation succeeded — read the response body.',
+        'Cross-check response fields against the documented contract shown in your brief.',
+        'Response times are part of the contract too — check them against the SLA.',
+      ],
+      createData: () => ({
+        selected: null,
+        viewed: {},
+        requests: cloneRequests(),
+      }),
+      render: renderApiApp,
+      bugs: [
+        {
+          id: 'r4-status-mismatch', title: 'DELETE returns 200 OK for a failed deletion',
+          category: 'Functional', severity: 'High',
+          hint: 'A successful status code does not always mean the operation succeeded. Open the DELETE request and read its body.',
+          description: "DELETE /api/employees/EMP-003 responds with HTTP 200 OK, yet the body reports { success: false, error: 'Employee not found' }. Expected: a failed deletion should return 404 (or an appropriate error status), not 200.",
+          targets: ['r4-req-del'],
+          active: (r) => !!r.data.viewed.del,
+        },
+        {
+          id: 'r4-field-mismatch', title: 'API returns contradictory status fields for one employee',
+          category: 'Data', severity: 'Medium',
+          hint: 'In the employee list response, compare each record\u2019s status field against its statusLabel field.',
+          description: 'GET /api/employees returns Nadia Farooq with "status": "Inactive" but "statusLabel": "Active" — two fields on the same record contradicting each other. Expected: derived display fields must agree with the source data.',
+          targets: ['r4-req-list', 'r4-body-list'],
+          active: (r) => !!r.data.viewed.list,
+        },
+        {
+          id: 'r4-sensitive-data', title: 'Password hash exposed in user profile response',
+          category: 'Security', severity: 'Critical',
+          hint: 'The profile endpoint returns everything it knows about the current user. Should it?',
+          description: 'GET /api/users/me includes a passwordHash field in the response body. Expected: credential material must never be returned to the client — even hashed. Sensitive data exposure risk.',
+          targets: ['r4-req-me', 'r4-body-me'],
+          active: (r) => !!r.data.viewed.me,
+        },
+        {
+          id: 'r4-missing-field', title: 'Employee response is missing the documented email field',
+          category: 'Functional', severity: 'Medium',
+          hint: 'The API contract in your brief lists six fields for employee records. Check what actually arrives for EMP-007.',
+          description: 'GET /api/employees/EMP-007 returns id, name, dept, salary and status — but no email, which the API contract lists as a required field on every employee record. Expected: the response should include email.',
+          targets: ['r4-req-emp7', 'r4-body-emp7'],
+          active: (r) => !!r.data.viewed.emp7,
+        },
+        {
+          id: 'r4-slow-endpoint', title: 'Export endpoint far exceeds response-time SLA',
+          category: 'Performance', severity: 'Medium',
+          hint: 'Response times are part of the contract. Compare each request\u2019s duration against the 5-second SLA.',
+          description: 'POST /api/reports/export takes 30,142 ms to respond — six times the 5,000 ms SLA. Expected: the endpoint should respond within the SLA (or return 202 immediately and process asynchronously).',
+          targets: ['r4-req-export'],
         },
       ],
     },
@@ -354,9 +521,14 @@
     roundIndex: 0,
     score: 0,
     falseStreak: 0,
-    totals: { correct: 0, incorrect: 0, foundIds: [], timeUsedMs: 0 },
+    difficulty: 'standard',
+    paused: false,
+    totals: { correct: 0, incorrect: 0, foundIds: [], timeUsedMs: 0, hints: 0 },
     round: null, // active round runtime
   };
+
+  const diffDef = () => CONFIG.difficulties[Game.difficulty] || CONFIG.difficulties.standard;
+  const roundDurationMs = (def) => Math.round(def.duration * diffDef().timeMult) * 1000;
 
   /* ======================================================================
      7. DOM REFERENCES, HUD, TOASTS, OVERLAYS
@@ -382,6 +554,9 @@
     els.btnSound = $('#btn-sound');
     els.btnInspector = $('#btn-inspector');
     els.btnFinish = $('#btn-finish');
+    els.btnPause = $('#btn-pause');
+    els.btnHint = $('#btn-hint');
+    els.hintCost = $('#hint-cost');
     els.objective = $('#objective-body');
     els.trackerList = $('#tracker-list');
     els.trackerCount = $('#tracker-count');
@@ -543,7 +718,7 @@
     begin() {
       this.stop();
       const r = Game.round;
-      r.remainingMs = r.def.duration * 1000;
+      r.remainingMs = r.durationMs;
       r.deadline = Date.now() + r.remainingMs;
       this.handle = setInterval(() => this.tick(), 200);
       this.paint();
@@ -578,7 +753,7 @@
       const r = Game.round;
       if (!r) return;
       const sec = Math.ceil(r.remainingMs / 1000);
-      const frac = r.remainingMs / (r.def.duration * 1000);
+      const frac = r.remainingMs / r.durationMs;
       els.hudTimer.textContent = fmtTime(sec);
       els.progressFill.style.width = (frac * 100).toFixed(1) + '%';
       els.chipTimer.classList.toggle('warn', frac <= 0.25 && frac > 0.1);
@@ -598,7 +773,7 @@
     on: false,
 
     toggle(force) {
-      if (Game.screen !== 'playing') return;
+      if (Game.screen !== 'playing' || Game.paused) return;
       this.on = (typeof force === 'boolean') ? force : !this.on;
       this.sync();
       SoundFX.play('toggle');
@@ -1117,6 +1292,91 @@
     appNotice('r3-notice', 'Employee removed.', true);
   }
 
+  /* ------------------------- Round 4: API console ------------------------- */
+
+  function apiRowHTML(req, selected) {
+    const slow = req.ms > 5000;
+    return `
+      <button class="api-row${selected ? ' selected' : ''}" type="button" data-action="view-req" data-req="${req.id}"
+              data-inspect="API request — ${req.method} ${req.path}" data-key="r4-req-${req.id}"
+              aria-pressed="${selected ? 'true' : 'false'}">
+        <span class="m-chip m-${req.method.toLowerCase()}">${req.method}</span>
+        <span class="api-path">${esc(req.path)}</span>
+        <span class="s-chip s-ok">${req.status} ${esc(req.statusText)}</span>
+        <span class="api-ms${slow ? ' slow' : ''}">${req.ms.toLocaleString('en-US')} ms</span>
+      </button>`;
+  }
+
+  function apiDetailHTML(req) {
+    const headers = Object.keys(req.headers).map((h) =>
+      `<li><b>${esc(h)}:</b> ${esc(req.headers[h])}</li>`).join('');
+    return `
+      <div class="api-detail-card">
+        <div class="api-detail-head">
+          <span class="m-chip m-${req.method.toLowerCase()}">${req.method}</span>
+          <span>${esc(req.path)}</span>
+          <span class="s-chip s-ok">${req.status} ${esc(req.statusText)}</span>
+          <span class="api-ms">${req.ms.toLocaleString('en-US')} ms</span>
+        </div>
+        <div class="api-grid">
+          <section class="api-section" data-inspect="Response payload — ${req.method} ${req.path}" data-key="r4-body-${req.id}">
+            <h4>Response Body</h4>
+            <pre class="json-view">${jsonHTML(req.body)}</pre>
+          </section>
+          <section class="api-section" data-inspect="Response headers — ${req.method} ${req.path}" data-key="r4-headers-${req.id}">
+            <h4>Response Headers</h4>
+            <ul class="hdr-list">${headers}</ul>
+          </section>
+        </div>
+      </div>`;
+  }
+
+  function r4Select(id) {
+    const r = Game.round;
+    if (!r) return;
+    r.data.selected = id;
+    r.data.viewed[id] = true; // the payload has been seen — body-evident defects become reproducible
+    const list = $('#r4-list', els.aut);
+    const detail = $('#r4-detail', els.aut);
+    if (!list || !detail) return;
+    $$('.api-row', list).forEach((row) => {
+      const isSel = row.dataset.req === id;
+      row.classList.toggle('selected', isSel);
+      row.setAttribute('aria-pressed', isSel ? 'true' : 'false');
+    });
+    const req = r.data.requests.find((q) => q.id === id);
+    detail.innerHTML = req ? apiDetailHTML(req) : '';
+    Inspector.sync();
+  }
+
+  function renderApiApp(root) {
+    const d = Game.round.data;
+    root.innerHTML = `
+      <div class="app">
+        <div class="app-topbar">
+          <span class="app-logo"><span class="lg">EH</span> EmpHub</span>
+          <span class="app-crumb">/ <b>API Console</b></span>
+          <span class="app-user"><span class="u-dot">QT</span> qa-tester</span>
+        </div>
+        <div class="app-body">
+          <div class="api-head">
+            <div>
+              <h3>Network Activity</h3>
+              <p class="api-sub">Requests captured between the app and the server during your test session. Select a request to inspect its payload — file a report if anything violates the contract.</p>
+            </div>
+            <span class="count-chip">${d.requests.length} requests</span>
+          </div>
+          <div class="api-list" id="r4-list" role="list" aria-label="Captured API requests">
+            ${d.requests.map((req) => apiRowHTML(req, req.id === d.selected)).join('')}
+          </div>
+          <div id="r4-detail" aria-live="polite">
+            <div class="api-detail-card"><p class="api-empty">Select a request above to inspect its request and response details.</p></div>
+          </div>
+          <p class="api-foot">API docs: emphub.app/docs · Contract: id, name, email, department, salary, status · SLA: 5000 ms</p>
+        </div>
+      </div>`;
+  }
+
   /* ------------------------- Action router ------------------------- */
 
   function handleAction(el) {
@@ -1136,6 +1396,7 @@
       case 'reset-form': actionResetForm(); break;
       case 'cancel-edit': r3ExitEditMode(); break;
       case 'edit': actionEditEmployee(el.dataset.id); break;
+      case 'view-req': r4Select(el.dataset.req); break;
       default: break;
     }
   }
@@ -1272,10 +1533,11 @@
 
   function rejectReport(kind) {
     const S = CONFIG.scoring;
+    const penalty = S.incorrect * diffDef().penaltyMult;
     Game.round.reports.incorrect++;
     Game.totals.incorrect++;
     Game.falseStreak++;
-    addScore(S.incorrect);
+    addScore(penalty);
     updateHUD();
     SoundFX.play('error');
 
@@ -1289,7 +1551,7 @@
 
     showReportResult('err', `
       <p class="result-msg">${msg}</p>
-      <div class="pts-line neg"><span>Score adjustment</span><b>${S.incorrect}</b></div>
+      <div class="pts-line neg"><span>Score adjustment</span><b>${penalty}</b></div>
     `);
   }
 
@@ -1359,6 +1621,152 @@
   }
 
   /* ======================================================================
+     12b. HINTS, PAUSE, SESSION HISTORY & SHARING
+     ====================================================================== */
+
+  function requestHint() {
+    const r = Game.round;
+    if (!r || r.ended || Game.paused) return;
+    const unfound = r.def.bugs.filter((b) => !r.found.has(b.id));
+    if (!unfound.length) {
+      toast('Nothing left to hint — every defect in this build is already found.', 'info');
+      return;
+    }
+    // Prefer a hint for a defect that is currently reproducible.
+    const active = unfound.filter(bugIsActive);
+    const target = (active.length ? active : unfound)[0];
+    const cost = CONFIG.scoring.hintCost;
+
+    Timer.pause();
+    Game.totals.hints++;
+    addScore(-cost);
+    SoundFX.play('click');
+
+    Modal.open(`
+      <div class="modal-head">
+        <h2 class="modal-title" id="modal-title">💡 Hint — Round ${Game.roundIndex + 1}</h2>
+        <p class="modal-sub">A nudge toward one unfound defect. It never names the exact element.</p>
+      </div>
+      <div class="confirm-box">
+        <p class="result-msg" style="font-size:15px">${esc(target.hint || 'Re-examine every element in the current test scope.')}</p>
+        <div class="pts-line neg"><span>Hint cost</span><b>−${cost}</b></div>
+        <div class="report-actions">
+          <button class="btn btn-primary" type="button" id="hint-close">Back to Testing</button>
+        </div>
+      </div>`,
+      {
+        dismissible: true,
+        onClose: () => { if (Game.screen === 'playing' && !Game.paused) Timer.resume(); },
+      });
+    $('#hint-close').addEventListener('click', () => Modal.close());
+  }
+
+  function togglePause(force) {
+    if (Game.screen !== 'playing' || !Game.round || Game.round.ended) return;
+    if (els.modalRoot.childElementCount > 0) return; // never pause behind an open dialog
+    const target = (typeof force === 'boolean') ? force : !Game.paused;
+    if (target === Game.paused) return;
+    Game.paused = target;
+    SoundFX.play('toggle');
+    if (target) {
+      Timer.pause();
+      const r = Game.round;
+      showOverlay(`
+        <div style="text-align:center">
+          <p class="round-kicker">SESSION PAUSED</p>
+          <h2 class="round-title">⏸ Clock stopped</h2>
+          <p class="intro-brief" style="margin-top:10px">Round ${Game.roundIndex + 1} — ${esc(r.def.name)}. Your timer, score and findings are safe.</p>
+          <div class="pause-stats">
+            <span class="meta-chip">Score: ${Game.score.toLocaleString('en-US')}</span>
+            <span class="meta-chip">Bugs found: ${r.found.size}/${r.def.bugs.length}</span>
+            <span class="meta-chip">Time left: ${fmtTime(r.remainingMs / 1000)}</span>
+          </div>
+          <div class="cta-row" style="justify-content:center">
+            <button class="btn btn-primary btn-lg" type="button" id="btn-resume">▶ Resume Testing</button>
+          </div>
+        </div>`);
+      $('#btn-resume').addEventListener('click', () => togglePause(false));
+    } else {
+      hideOverlay();
+      Timer.resume();
+    }
+  }
+
+  /* ----- Session history (localStorage, personal bests only — no leaderboards) ----- */
+
+  function readHistory() {
+    try {
+      const raw = window.localStorage.getItem(CONFIG.historyKey);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (_) { return []; }
+  }
+
+  function saveHistoryEntry() {
+    try {
+      const t = Game.totals;
+      const reports = t.correct + t.incorrect;
+      const entry = {
+        score: Game.score,
+        found: t.foundIds.length,
+        total: TOTAL_BUGS,
+        accuracy: reports ? Math.round((t.correct / reports) * 100) : null,
+        mode: Game.difficulty,
+        hints: t.hints,
+        date: new Date().toISOString().slice(0, 10),
+      };
+      const list = readHistory();
+      list.unshift(entry);
+      window.localStorage.setItem(CONFIG.historyKey, JSON.stringify(list.slice(0, 10)));
+    } catch (_) { /* storage unavailable — history is optional */ }
+  }
+
+  function bestLineHTML() {
+    const list = readHistory();
+    if (!list.length) return '';
+    const best = list.reduce((a, b) => (b.score > a.score ? b : a), list[0]);
+    const label = (CONFIG.difficulties[best.mode] || CONFIG.difficulties.standard).label;
+    return `<p class="best-line">🎯 Personal best: <b>${best.score.toLocaleString('en-US')}</b> (${label}) · Sessions played: ${list.length}</p>`;
+  }
+
+  /* ----- Shareable session summary ----- */
+
+  function buildShareText() {
+    const t = Game.totals;
+    const reports = t.correct + t.incorrect;
+    const acc = reports ? Math.round((t.correct / reports) * 100) + '%' : '—';
+    return [
+      '🐛 QA Bug Hunter — Test Session Report',
+      `Score: ${Game.score.toLocaleString('en-US')} · Bugs found: ${t.foundIds.length}/${TOTAL_BUGS} · Accuracy: ${acc}`,
+      `Mode: ${diffDef().label} · Hints used: ${t.hints} · Time: ${fmtTime(t.timeUsedMs / 1000)}`,
+      `Play it: ${CONFIG.profile.links.game}`,
+    ].join('\n');
+  }
+
+  function copyShareText() {
+    const text = buildShareText();
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); toast('Session summary copied to clipboard.', 'success'); }
+      catch (_) { toast('Could not access the clipboard — select and copy the summary manually.', 'error'); }
+      ta.remove();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => toast('Session summary copied to clipboard.', 'success'))
+        .catch(fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  /* ======================================================================
      13. ROUND FLOW + FINAL REPORT
      ====================================================================== */
 
@@ -1399,13 +1807,15 @@
     Timer.pause();
     Timer.stop();
 
-    const usedMs = Math.min(r.def.duration * 1000, Math.max(0, r.def.duration * 1000 - r.remainingMs));
+    const usedMs = Math.min(r.durationMs, Math.max(0, r.durationMs - r.remainingMs));
     Game.totals.timeUsedMs += usedMs;
     Game.screen = 'summary';
     Inspector.on = false;
     Inspector.sync();
     els.btnFinish.disabled = true;
     els.btnInspector.disabled = true;
+    els.btnPause.disabled = true;
+    els.btnHint.disabled = true;
     SoundFX.play('round');
 
     const roundNo = Game.roundIndex + 1;
@@ -1436,6 +1846,7 @@
       <h2 class="round-title">${esc(r.def.name)} — Complete</h2>
       <div class="meta-row">
         <span class="meta-chip">Build ${esc(r.def.build)}</span>
+        <span class="meta-chip">Mode: ${esc(diffDef().label)}</span>
         <span class="meta-chip">Defects found: ${found}/${total}</span>
         <span class="meta-chip">Accuracy: ${r.reports.correct + r.reports.incorrect > 0
           ? Math.round((r.reports.correct / (r.reports.correct + r.reports.incorrect)) * 100) + '%' : '—'}</span>
@@ -1476,7 +1887,8 @@
       <div class="meta-row">
         <span class="meta-chip">Build ${esc(def.build)}</span>
         <span class="meta-chip">${esc(def.url)}</span>
-        <span class="meta-chip">Time box: ${fmtTime(def.duration)}</span>
+        <span class="meta-chip">Time box: ${fmtTime(roundDurationMs(def) / 1000)}</span>
+        <span class="meta-chip">Mode: ${esc(diffDef().label)}</span>
         <span class="meta-chip">Suspected defects: ${def.bugs.length}</span>
       </div>
       <p class="intro-brief">${esc(def.brief)}</p>
@@ -1486,7 +1898,7 @@
         ${def.testData ? `<div class="testdata">${esc(def.testData)}</div>` : ''}
       </div>
       <div class="cta-row">
-        <button class="btn btn-primary btn-lg" type="button" id="btn-start-round">Start Testing · ${fmtTime(def.duration)}</button>
+        <button class="btn btn-primary btn-lg" type="button" id="btn-start-round">Start Testing · ${fmtTime(roundDurationMs(def) / 1000)}</button>
       </div>
     `);
 
@@ -1500,23 +1912,27 @@
   function beginRound(index) {
     const def = ROUNDS[index];
     Game.screen = 'playing';
+    Game.paused = false;
     Game.round = {
       def,
+      durationMs: roundDurationMs(def),
       found: new Set(),
       flags: {},
       data: def.createData(),
       reports: { correct: 0, incorrect: 0 },
       points: { bugs: 0, triage: 0, bonus: 0, time: 0 },
-      remainingMs: def.duration * 1000,
+      remainingMs: roundDurationMs(def),
       deadline: null,
       ended: false,
       bannerShown: false,
     };
 
-    els.buildInfo.textContent = `Build ${def.build} · ${def.name}`;
+    els.buildInfo.textContent = `Build ${def.build} · ${def.name} · ${diffDef().label}`;
     els.autUrl.textContent = def.url;
     els.btnFinish.disabled = false;
     els.btnInspector.disabled = false;
+    els.btnPause.disabled = false;
+    els.btnHint.disabled = false;
     resetTracker();
     updateObjective(def);
     updateHUD();
@@ -1548,19 +1964,19 @@
 
   function performanceFor(score, accuracy) {
     const accNote = accuracy !== null ? ` Report accuracy: ${accuracy}%.` : '';
-    if (score >= 2100) {
+    if (score >= 2800) {
       return {
         title: '🏆 Outstanding Testing Session',
         msg: 'Exceptional attention to detail. You reproduced, triaged and documented defects like a senior QA engineer. The build does not stand a chance against you.' + accNote,
       };
     }
-    if (score >= 1500) {
+    if (score >= 2000) {
       return {
         title: '⭐ Excellent Testing Session',
         msg: 'You demonstrated strong attention to detail and methodical test thinking across every module. With a little more coverage, no defect would escape you.' + accNote,
       };
     }
-    if (score >= 900) {
+    if (score >= 1200) {
       return {
         title: '✅ Good Testing Session',
         msg: 'Solid testing instincts — you found real defects and filed focused reports. Review the missed defects below: edge cases are where quality lives.' + accNote,
@@ -1574,11 +1990,12 @@
 
   function showResults() {
     Game.screen = 'results';
+    saveHistoryEntry();
     const foundSet = new Set(Game.totals.foundIds);
     const allBugs = ROUNDS.flatMap((rd, i) => rd.bugs.map((b) => ({ ...b, roundNo: i + 1 })));
     const missed = allBugs.filter((b) => !foundSet.has(b.id));
 
-    const catOrder = ['Functional', 'Validation', 'UI', 'Data', 'Security'];
+    const catOrder = ['Functional', 'Validation', 'UI', 'Data', 'Security', 'Performance'];
     const catRows = catOrder
       .map((cat) => {
         const bugs = allBugs.filter((b) => b.category === cat);
@@ -1616,6 +2033,8 @@
         <div class="stat-chip"><span class="v ${accuracy !== null && accuracy >= 70 ? 'good' : accuracy !== null && accuracy < 50 ? 'bad' : 'neutral'}">${accuracy === null ? '—' : accuracy + '%'}</span><span class="l">Report Accuracy</span></div>
         <div class="stat-chip"><span class="v neutral">${fmtTime(Game.totals.timeUsedMs / 1000)}</span><span class="l">Time Used</span></div>
         <div class="stat-chip"><span class="v ${Game.totals.incorrect > 3 ? 'bad' : 'neutral'}">${Game.totals.incorrect}</span><span class="l">False Reports</span></div>
+        <div class="stat-chip"><span class="v neutral">${esc(diffDef().label)}</span><span class="l">Mode</span></div>
+        <div class="stat-chip"><span class="v ${Game.totals.hints > 3 ? 'bad' : 'neutral'}">${Game.totals.hints}</span><span class="l">Hints Used</span></div>
       </div>
 
       <div class="message-card">
@@ -1629,6 +2048,7 @@
         <div class="extra-rows" style="margin-top:13px">
           <div class="extra-row">Verified reports: <b>${Game.totals.correct}</b></div>
           <div class="extra-row">Incorrect findings: <b>${Game.totals.incorrect}</b></div>
+          <div class="extra-row">Hints used: <b>${Game.totals.hints}</b></div>
           <div class="extra-row">Missed bugs: <b>${missed.length}</b></div>
         </div>
       </div>
@@ -1640,6 +2060,7 @@
 
       <div class="cta-row" style="margin-bottom:22px">
         <button class="btn btn-primary btn-lg" type="button" id="btn-play-again">Play Again</button>
+        <button class="btn btn-outline" type="button" id="btn-copy-summary">📋 Copy Session Summary</button>
         <button class="btn btn-outline" type="button" id="btn-back-start">Back to Start Screen</button>
       </div>
       ${creditBlock()}
@@ -1657,6 +2078,10 @@
       resetGame();
       showRoundIntro(0);
     });
+    $('#btn-copy-summary').addEventListener('click', () => {
+      SoundFX.play('click');
+      copyShareText();
+    });
     $('#btn-back-start').addEventListener('click', () => {
       SoundFX.play('click');
       resetGame();
@@ -1669,15 +2094,32 @@
   function showStartScreen() {
     Game.screen = 'start';
     const S = CONFIG.scoring;
+    const diffBtn = (key) => {
+      const d = CONFIG.difficulties[key];
+      const sel = Game.difficulty === key;
+      return `<button class="diff-btn${sel ? ' selected' : ''}" type="button" data-diff="${key}" aria-pressed="${sel}">
+        ${d.label}<small>${esc(d.desc)}</small>
+      </button>`;
+    };
     showOverlay(`
       <span class="hero-badge">PORTFOLIO PROJECT · SOFTWARE QA</span>
       <h2 class="hero-title">QA Bug Hunter</h2>
       <p class="hero-sub">Find the bugs. Break the build. Prove your QA skills.</p>
 
       <div class="steps-grid">
-        <div class="step-card"><span class="step-num">1</span><b>Test the app</b><p>Interact with a simulated web application — log in, search, filter, add and edit records like a real tester.</p></div>
+        <div class="step-card"><span class="step-num">1</span><b>Test the app</b><p>Interact with a simulated web application — log in, search, filter, add records and inspect live API traffic like a real tester.</p></div>
         <div class="step-card"><span class="step-num">2</span><b>File bug reports</b><p>Toggle the Inspector and click any suspicious element to file a defect report with category and severity.</p></div>
         <div class="step-card"><span class="step-num">3</span><b>Score points</b><p>Earn points for confirmed defects, lose points for false reports, and finish with a full QA session report.</p></div>
+      </div>
+
+      <div class="diff-box">
+        <h3>Testing Mode</h3>
+        <div class="diff-selector" role="group" aria-label="Testing mode">
+          ${diffBtn('relaxed')}
+          ${diffBtn('standard')}
+          ${diffBtn('hardcore')}
+        </div>
+        ${bestLineHTML()}
       </div>
 
       <div class="scoring-card">
@@ -1689,16 +2131,33 @@
           <tr><td>False or unreproducible report</td><td class="neg">${S.incorrect}</td></tr>
           <tr><td>All defects in a round</td><td class="pos">+${S.allFoundBonus}</td></tr>
           <tr><td>Fast completion (per second left)</td><td class="pos">+${S.timeBonusPerSec}</td></tr>
+          <tr><td>Hint (scoped clue)</td><td class="neg">−${S.hintCost}</td></tr>
         </table>
       </div>
 
       <div class="cta-row">
         <button class="btn btn-primary btn-lg" type="button" id="btn-start-session">▶ Start Testing Session</button>
-        <span class="cta-note">3 rounds · ${TOTAL_BUGS} seeded defects · no login, no server — runs entirely in your browser.</span>
+        <span class="cta-note">${ROUNDS.length} rounds · ${TOTAL_BUGS} seeded defects · no login, no server — runs entirely in your browser.</span>
       </div>
+      <p class="shortcuts-line">Shortcuts: <kbd>I</kbd> toggle inspector · <kbd>P</kbd> pause · <kbd>Esc</kbd> close dialog</p>
       <div style="height:22px"></div>
       ${creditBlock()}
     `);
+
+    $$('.diff-btn', els.overlayRoot).forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.diff;
+        if (!CONFIG.difficulties[key]) return;
+        Game.difficulty = key;
+        try { window.localStorage.setItem(CONFIG.diffKey, key); } catch (_) { /* ignore */ }
+        SoundFX.play('click');
+        $$('.diff-btn', els.overlayRoot).forEach((b) => {
+          const sel = b.dataset.diff === key;
+          b.classList.toggle('selected', sel);
+          b.setAttribute('aria-pressed', String(sel));
+        });
+      });
+    });
 
     $('#btn-start-session').addEventListener('click', () => {
       SoundFX.play('click');
@@ -1712,7 +2171,8 @@
   function resetGame() {
     Game.score = 0;
     Game.falseStreak = 0;
-    Game.totals = { correct: 0, incorrect: 0, foundIds: [], timeUsedMs: 0 };
+    Game.paused = false;
+    Game.totals = { correct: 0, incorrect: 0, foundIds: [], timeUsedMs: 0, hints: 0 };
     Game.round = null;
     Game.roundIndex = 0;
     Game.screen = 'start';
@@ -1732,6 +2192,8 @@
     els.autUrl.textContent = 'emphub.app';
     els.btnFinish.disabled = true;
     els.btnInspector.disabled = true;
+    els.btnPause.disabled = true;
+    els.btnHint.disabled = true;
     els.hudTimer.textContent = '—:—';
     els.progressFill.style.width = '0%';
     els.chipTimer.classList.remove('warn', 'crit');
@@ -1795,6 +2257,10 @@
     });
 
     els.btnInspector.addEventListener('click', () => Inspector.toggle());
+    els.btnPause.addEventListener('click', () => togglePause());
+    els.btnHint.addEventListener('click', () => {
+      if (Game.screen === 'playing') requestHint();
+    });
     els.btnFinish.addEventListener('click', () => {
       if (Game.screen === 'playing') { SoundFX.play('click'); confirmFinishRound(); }
     });
@@ -1808,13 +2274,18 @@
       toast(SoundFX.enabled ? 'Sound on.' : 'Sound off.', 'info');
     });
 
-    // Keyboard shortcut: "i" toggles the Inspector while a round is running.
+    // Keyboard shortcuts: "i" toggles the Inspector, "p" pauses/resumes.
     document.addEventListener('keydown', (e) => {
-      if (e.key !== 'i' || e.ctrlKey || e.metaKey || e.altKey) return;
-      if (Game.screen !== 'playing') return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const t = e.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
-      Inspector.toggle();
+      const inField = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+      if (inField) return;
+      if (Game.screen !== 'playing') return;
+      if (e.key === 'i' && !Game.paused) {
+        Inspector.toggle();
+      } else if (e.key === 'p') {
+        togglePause();
+      }
     });
   }
 
@@ -1822,6 +2293,13 @@
     cacheDom();
     SoundFX.restore();
     els.btnSound.setAttribute('aria-pressed', String(SoundFX.enabled));
+
+    // Restore the player's preferred testing mode (local only — never transmitted).
+    try {
+      const savedDiff = window.localStorage.getItem(CONFIG.diffKey);
+      if (savedDiff && CONFIG.difficulties[savedDiff]) Game.difficulty = savedDiff;
+    } catch (_) { /* storage unavailable — keep default */ }
+    els.hintCost.textContent = String(CONFIG.scoring.hintCost);
 
     // Footer is rendered from the single CONFIG source of truth.
     els.footerName.textContent = CONFIG.profile.name;

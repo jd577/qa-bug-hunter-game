@@ -8,6 +8,22 @@
 
 ---
 
+## 📸 Screenshots
+
+| Start screen & testing modes | Round 4 — API & Network Testing |
+|---|---|
+| ![Start screen](assets/screenshots/start-screen.png) | ![API console](assets/screenshots/api-round.png) |
+
+| Filing a bug report | Confirmed defect |
+|---|---|
+| ![Filing a bug report](assets/screenshots/bug-report.png) | ![Defect confirmed](assets/screenshots/defect-confirmed.png) |
+
+| Employee directory (Round 2) | Final QA report |
+|---|---|
+| ![Employee directory](assets/screenshots/round2-directory.png) | ![Final QA report](assets/screenshots/final-report.png) |
+
+---
+
 ## 📋 Project Overview
 
 QA Bug Hunter is an interactive portfolio project built by a Software Quality Assurance Engineer to demonstrate practical testing thinking — not just theory. Instead of reading about test techniques, visitors *experience* them: they must interact with an application under test, reproduce functional/validation/UI/data defects, triage them by category and severity, and are scored on precision, not luck.
@@ -18,13 +34,18 @@ Everything runs **100% client-side**. There is no backend, no database, no login
 
 ## ✨ Features
 
-- **3 testing rounds** with rising difficulty — Login & Authentication, Employee Directory, Form Validation & Data Handling
-- **13 realistic seeded defects** (functional, validation, UI, data and security) — never revealed upfront
+- **4 testing rounds** with rising difficulty — Login & Authentication, Employee Directory, Form Validation & Data Handling, and **API & Network Testing**
+- **18 realistic seeded defects** (functional, validation, UI, data, security and performance) — never revealed upfront
+- **API testing round** — inspect captured HTTP traffic in a network console: status-code mismatches, contract violations, sensitive-data exposure and SLA breaches
+- **3 testing modes** — Relaxed (more time), Standard, Hardcore (tighter timer, double penalties)
 - **Interactive application under test** — a fully working simulated app where bugs must be *reproduced*, not just spotted
 - **Inspector mode** — toggle it and click any element to file a structured bug report (title, category, severity, description)
+- **Hint system** — spend points for a scoped clue when you're stuck (never the exact element)
+- **Pause** — stop the clock mid-round (`P`); the timer also pauses automatically while you write a bug report
 - **Realistic scoring** — points for confirmed defects, penalties for false reports, triage and speed bonuses
-- **Per-round countdown timer** with progress bar (pauses while you write a bug report)
-- **Final QA report** — score, accuracy, per-category performance, missed defects and a session verdict
+- **Per-round countdown timer** with progress bar and warning states
+- **Final QA report** — score, accuracy, per-category performance, missed defects, a session verdict and a copyable session summary
+- **Personal best & session history** — stored locally in your browser only (no accounts, no servers, no tracking)
 - **Defect tracker panel** — confirmed bugs appear live with severity indicators
 - Dark professional QA-dashboard UI wrapping a light enterprise app
 - Fully responsive (desktop / laptop / tablet / mobile), keyboard accessible, `prefers-reduced-motion` aware
@@ -42,6 +63,8 @@ Everything runs **100% client-side**. There is no backend, no database, no login
 | Vanilla JavaScript (ES2020) | Game engine, simulated app logic, scoring, timer, Web Audio sounds |
 
 No frameworks, no build step, no dependencies, no network calls.
+
+**Privacy:** the game runs 100% in your browser. It makes **zero network requests** — no analytics, no tracking, no accounts. Session history and preferences are stored only in your own browser's `localStorage` and never leave your device.
 
 ---
 
@@ -86,9 +109,10 @@ cd qa-bug-hunter-game
 | Confirmed defect (Medium / Low severity) | **+100** |
 | Confirmed Critical / High severity defect | **+150** |
 | Accurate triage (your category + severity match the actual defect) | **+25** |
-| False or unreproducible report | **−50** |
+| False or unreproducible report | **−50** (doubled in Hardcore) |
 | All defects found in a round | **+250** |
 | Fast completion (per second remaining, when all defects are found) | **+1 / sec** |
+| Hint (scoped clue) | **−75** |
 
 ### Rounds
 
@@ -97,6 +121,15 @@ cd qa-bug-hunter-game
 | 1 | Login & Authentication | Field behaviour, credential validation, navigation elements |
 | 2 | Employee Directory | Search, filters, sorting, data accuracy, destructive actions, pagination |
 | 3 | Form Validation & Data Handling | Required fields, negative input, invalid formats, duplicates, edit flow |
+| 4 | API & Network Testing | Status codes vs. response bodies, contract compliance, sensitive-data exposure, response-time SLAs |
+
+### Testing modes
+
+| Mode | Timer | Penalties |
+|---|---|---|
+| Relaxed | +50% time per round | standard |
+| Standard | intended pacing | standard |
+| Hardcore | −30% time per round | double |
 
 ---
 
@@ -115,6 +148,10 @@ cd qa-bug-hunter-game
 | Losing points for unverifiable reports | False positives & report quality |
 | Cross-checking the same data in two places | Consistency / oracle thinking |
 | Every element is clickable and testable | User interaction testing, attention to detail |
+| Inspecting captured requests and payloads | **API testing**, contract verification |
+| Spotting 200-OK responses that actually failed | Status-code / error-handling validation |
+| Finding exposed `passwordHash` in a payload | Sensitive-data / security testing |
+| Checking response times against an SLA | Performance & non-functional testing |
 | Round summaries listing missed defects | Test retrospectives / coverage gaps |
 
 ---
@@ -166,6 +203,7 @@ The footer, start screen and results screen all render their links from this one
 - Real `<button>`, `<select>`, `<label>` elements throughout; visible `:focus-visible` states
 - Inspector targets become keyboard-focusable with `role="button"` while Inspector mode is on; activate with `Enter` / `Space`
 - Dialogs use `role="dialog"`, `aria-modal`, focus trapping and `Escape` to cancel
+- Keyboard shortcuts: `I` toggles the Inspector, `P` pauses/resumes the session
 - Toasts and app status lines announce via `aria-live`
 - All player-typed input is HTML-escaped (yes — we tried the XSS payloads too 😄)
 - `prefers-reduced-motion` disables non-essential animation
@@ -175,9 +213,7 @@ The footer, start screen and results screen all render their links from this one
 
 ## 🔭 Future Improvements
 
-- Additional modules (reporting dashboard, file upload, API/mocked-network inspection)
-- A "hint" system costing points, and a hard mode with a stricter timer
-- localStorage high-score history (opt-in)
+- Additional modules (reporting dashboard, file upload, rate-limit handling)
 - Localizable strings and more seeded-defect packs contributed via a simple JSON schema
 - Optional automated test suite (e.g., Playwright) run via GitHub Actions
 

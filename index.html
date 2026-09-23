@@ -75,6 +75,7 @@
             Inspector <span class="toggle-state">OFF</span>
           </button>
           <div class="build-info" id="build-info">No active session</div>
+          <button id="btn-pause" class="btn-ghost" type="button" disabled aria-label="Pause the testing session">⏸ Pause</button>
           <button id="btn-finish" class="btn-ghost" type="button" disabled>Finish Testing</button>
         </div>
 
@@ -107,6 +108,14 @@
           <ul class="tracker-list" id="tracker-list" aria-live="polite">
             <li class="tracker-empty">No defects filed yet. Toggle the Inspector, then click a suspicious element.</li>
           </ul>
+        </section>
+
+        <section class="panel-card">
+          <h2 class="panel-title">Need a Clue?</h2>
+          <button id="btn-hint" class="btn btn-outline hint-btn" type="button" disabled>
+            💡 Get Hint · <span id="hint-cost">−75</span> pts
+          </button>
+          <p class="hint-note">Reveals a nudge toward one unfound defect — never the exact element.</p>
         </section>
 
         <section class="panel-card">
